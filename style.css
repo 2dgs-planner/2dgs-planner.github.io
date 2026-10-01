@@ -69,15 +69,15 @@ figure a:hover img { opacity: .92; }
 /* Looping clips */
 video.loop { cursor: pointer; }
 .clip-player { position: relative; min-width: 0; }
-.clip-toolbar { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 6px; max-width: calc(100% - 20px); }
+.clip-toolbar { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .clip-toolbar button, .clip-toolbar select {
-  min-height: 34px; padding: 5px 10px; border: 1px solid #ffffff70;
-  border-radius: 6px; background: #202020df; color: #fff;
+  min-height: 34px; padding: 5px 10px; border: 1px solid var(--line);
+  border-radius: 6px; background: #fff; color: var(--muted);
   font: 13px/1.4 var(--sans); cursor: pointer;
 }
 .clip-toolbar button { min-width: 64px; }
 .clip-toolbar select { min-width: 0; max-width: 190px; }
-.clip-toolbar button:hover, .clip-toolbar select:hover { background: #111; }
+.clip-toolbar button:hover, .clip-toolbar select:hover { background: var(--soft); color: var(--text); }
 
 /* Layer tabs */
 .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
