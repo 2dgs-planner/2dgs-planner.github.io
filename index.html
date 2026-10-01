@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="author" content="Jiwon Park, Dong-Uk Seo, Hyun Myung">
+  <meta name="description" content="2DGS-Planner reads geometry through rasterization to build adaptive roadmaps and refine ground-robot paths directly in 2D Gaussian Splatting maps.">
+  <meta property="og:title" content="2DGS-Planner: Rasterization-based Path Planning in 2D Gaussian Splatting Map">
+  <meta property="og:description" content="A path planner for ground robots that reads planning-relevant geometry from a 2DGS map through rasterization.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://2dgs-planner.github.io/files/images/teaser-figure.webp">
+  <meta property="og:url" content="https://2dgs-planner.github.io/">
+  <link rel="canonical" href="https://2dgs-planner.github.io/">
+  <title>2DGS-Planner</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+<header class="title-block">
+  <h1>2DGS-Planner</h1>
+  <p class="subtitle">Rasterization-based Path Planning in 2D Gaussian Splatting Map</p>
+  <p class="authors">
+    <span class="author">Jiwon Park,</span>
+    <span class="author">Dong-Uk Seo,</span>
+    <span class="author">Hyun Myung</span>
+  </p>
+  <p class="emails">zzziito.park@gmail.com</p>
+  <nav class="links" aria-label="Paper resources">
+    <span class="button disabled" aria-disabled="true"><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 18M19 3 12.5 11.5M5 21l5-6.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></span><span>arXiv (TBU)</span></span>
+    <span class="button disabled" aria-disabled="true"><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.56-.29-5.25-1.28-5.25-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.39-5.27 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg></span><span>Code (TBU)</span></span>
+    <span class="button disabled" aria-disabled="true"><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3" fill="currentColor"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5c0 1.66-3.58 3-8 3S4 6.66 4 5z" fill="currentColor"/><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3" fill="none" stroke="#363636" stroke-width="1.3"/></svg></span><span>Data (TBU)</span></span>
+    <span class="button disabled" aria-disabled="true"><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="4.5" width="22" height="15" rx="4.5" fill="currentColor"/><path d="M10 9v6l5.2-3z" fill="#363636"/></svg></span><span>Video (TBU)</span></span>
+  </nav>
+</header>
+
+<main>
+  <figure class="wide teaser">
+    <video class="loop" muted loop playsinline preload="none" width="2580" height="1280" poster="files/posters/teaser.webp" data-src="files/videos/teaser.mp4" aria-label="Outdoor planning demonstration"></video>
+    <figcaption>Planning directly on a 2DGS map of an outdoor courtyard. <b>Left:</b> Gaussian disks, the roadmap, and the planned path. <b>Right:</b> the rendered scene along the same path.</figcaption>
+  </figure>
+
+  <section id="abstract">
+    <h2>Abstract</h2>
+    <p>Gaussian splatting provides an explicit and efficiently rasterizable scene representation for robot navigation. However, individual Gaussian primitives may not reliably represent obstacles as they are jointly optimized through alpha-composited rendering from a finite set of reconstruction views. We propose 2DGS-Planner, a path planner for ground robots that reads planning-relevant geometry from a 2D Gaussian splatting (2DGS) map through rasterization, rather than treating individual Gaussian primitives as obstacles. During offline roadmap construction, multi-view attribution converts rendered normal dispersion into structural scores for non-ground disks supported by the reconstruction views. These scores guide adaptive node sampling on the ground. Path-aligned orthographic queries validate candidate edges, while cylindrical queries estimate local clearance fields that are cached on the edges. During online planning, graph search initializes a route, and path refinement reuses the cached fields while accounting for the robot’s dimensions and ground constraints. Experiments demonstrate improved roadmap connectivity, more accurate clearance estimation, and higher planning success compared with the tested baselines. These results support rasterization as an effective geometric query interface for planning directly on Gaussian maps.</p>
+  </section>
+
+  <section id="featured" class="band" aria-labelledby="featured-title">
+    <div class="band-inner">
+      <h2 id="featured-title">Planning results</h2>
+      <p class="lead">Paths from each planner for the same start–goal pairs, drawn in the 2DGS map.</p>
+
+      <figure class="result">
+        <div class="result-head">
+          <h3>Stonehenge</h3>
+          <p class="result-stat"><b>SPL 0.956</b> · 48/50 pass collision check</p>
+        </div>
+        <video class="loop" muted loop playsinline preload="none" width="1280" height="720" poster="files/posters/stonehenge.webp" data-src="files/videos/stonehenge.mp4" aria-label="Paths from all six methods in the Stonehenge scene"></video>
+        <ul class="legend" aria-label="Path colors">
+          <li><span class="swatch gt"></span>GT</li><li><span class="swatch ours"></span>Ours</li><li><span class="swatch prm"></span>Disk PRM</li><li><span class="swatch rrt"></span>RRT*</li><li><span class="swatch irrt"></span>Informed-RRT*</li><li><span class="swatch esdf"></span>ESDF</li>
+        </ul>
+      </figure>
+
+      <figure class="result">
+        <div class="result-head">
+          <h3>Tokyo</h3>
+          <p class="result-stat"><b>SPL 0.782</b> · 40/50 pass collision check</p>
+        </div>
+        <video class="loop" muted loop playsinline preload="none" width="1280" height="720" poster="files/posters/tokyo.webp" data-src="files/videos/tokyo.mp4" aria-label="Paths from GT, our planner, and ESDF in the Tokyo scene"></video>
+        <ul class="legend" aria-label="Path colors">
+          <li><span class="swatch gt"></span>GT</li><li><span class="swatch ours"></span>Ours</li><li><span class="swatch esdf"></span>ESDF</li>
+          <li class="legend-note">Other methods failed to generate feasible paths.</li>
+        </ul>
+      </figure>
+      <details class="result map">
+        <summary class="result-head">
+          <h3>Top-down view</h3>
+          <p class="result-stat">Start–goal pairs 0–9 in each scene</p>
+        </summary>
+        <figure>
+          <a href="files/images/trajectory-maps.svg" target="_blank" rel="noopener"><img src="files/images/trajectory-maps.webp" width="2200" height="1200" loading="lazy" alt="Top-down maps of Stonehenge and Tokyo with the paths of each method for start-goal pairs 0 to 9, drawn over the traversable ground."></a>
+          <figcaption>Paths are B-spline-smoothed for display, as in the videos above. Tokyo shows GT, Ours, and ESDF; dashed lines are failed attempts. Click the map to zoom.</figcaption>
+        </figure>
+      </details>
+      <p class="band-note">Our full planner (adaptive + refinement). SPL and collision-check counts at ε<sub>ref</sub> over 50 start–goal pairs per scene. Full comparison in <a href="#results">Results</a>.</p>
+    </div>
+  </section>
+
+  <section id="deployment" class="band white" aria-labelledby="deployment-title">
+    <div class="band-inner">
+      <h2 id="deployment-title">Real-world deployment</h2>
+      <p class="lead">We plan a route in the 2DGS map of an indoor room, register the map to a FAST-LIO2 LiDAR map, and track the refined path on a humanoid robot with a pure-pursuit controller.</p>
+      <figure class="result">
+        <video class="loop" muted loop playsinline preload="none" width="1280" height="468" poster="files/posters/deployment.webp" data-src="files/videos/deployment.mp4" aria-label="The planned path and robot body in the 2DGS map beside the physical humanoid robot walking the same route from start to goal"></video>
+        <figcaption><b>Left:</b> planned path and robot body in the 2DGS map. <b>Right:</b> the humanoid robot executing the route. Insets show the rendered and real point of view. Played at 1.3× speed.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="motivation">
+    <h2>Why query the rendered surface?</h2>
+    <figure>
+      <a href="files/images/primitives.webp" target="_blank" rel="noopener"><img src="files/images/primitives.webp" width="1600" height="409" loading="lazy" alt="Three views compare an RGB rendering, the individual Gaussian disks, and disks whose depths deviate from the composited surface."></a>
+      <figcaption>(a) Rendered appearance. (b) The underlying 2D Gaussian disks. (c) Disks whose depth deviates strongly from the composited surface, shown in red. The rendering looks correct, but individual primitives are not reliable obstacles. 2DGS-Planner therefore queries the composited surface through rasterization instead.</figcaption>
+    </figure>
+  </section>
+
+  <section id="method">
+    <h2>Method</h2>
+    <figure class="wide">
+      <a href="files/images/framework.webp" target="_blank" rel="noopener"><img src="files/images/framework.webp" width="2200" height="1047" loading="lazy" alt="The full pipeline: preprocessing and multi-view attribution lead to adaptive sampling, orthographic edge screening, and cylindrical clearance caching; online A-star search and B-spline refinement produce the path and robot body poses."></a>
+      <figcaption><b>Overview.</b> Offline, we score surface structure from multiple views, sample ground nodes adaptively, screen edges with orthographic queries, and cache a cylindrical clearance field on each edge. Online, A* finds an initial route, which is refined as a B-spline using the cached clearance and then revalidated.</figcaption>
+    </figure>
+
+    <h3>Rendered layers</h3>
+    <p>Everything the planner uses is read from rasterized views of the same map.</p>
+    <div class="layers">
+      <div class="tabs" role="tablist" aria-label="Scene layer">
+        <button role="tab" id="layer-rgb" aria-selected="true" aria-controls="layer-panel" data-layer="rgb">RGB</button>
+        <button role="tab" id="layer-gui" aria-selected="false" aria-controls="layer-panel" tabindex="-1" data-layer="gui">Disks</button>
+        <button role="tab" id="layer-depth" aria-selected="false" aria-controls="layer-panel" tabindex="-1" data-layer="depth">Depth</button>
+        <button role="tab" id="layer-normal" aria-selected="false" aria-controls="layer-panel" tabindex="-1" data-layer="normal">Normal</button>
+        <button role="tab" id="layer-score" aria-selected="false" aria-controls="layer-panel" tabindex="-1" data-layer="score">Structural score</button>
+        <button role="tab" id="layer-semantic" aria-selected="false" aria-controls="layer-panel" tabindex="-1" data-layer="semantic">Semantics</button>
+      </div>
+      <div id="layer-panel" role="tabpanel" aria-labelledby="layer-rgb">
+        <img id="layer-image" src="files/images/scene-rgb.webp" width="1440" height="750" loading="lazy" alt="RGB rendering of the reconstructed outdoor courtyard with trees, chairs, and surrounding buildings.">
+        <p id="layer-caption" class="caption">RGB rendering of the reconstructed courtyard.</p>
+      </div>
+    </div>
+
+    <h3>Pipeline stages</h3>
+    <div class="flow">
+      <div class="phase">
+        <p class="phase-label">Offline · Roadmap construction</p>
+        <article class="step">
+          <video class="loop" muted loop playsinline preload="none" width="1280" height="640" poster="files/posters/attribution.webp" data-src="files/videos/attribution.mp4" aria-label="Rendered normals compared with disk normals in a planar region and at a corner"></video>
+          <div class="step-text">
+            <span class="step-no">1</span>
+            <h4>Multi-view attribution</h4>
+            <p>Rendered normals are compared with each disk’s normal across reconstruction views. Planar regions show low dispersion; corners show high dispersion.</p>
+          </div>
+        </article>
+        <div class="flow-arrow" aria-hidden="true"></div>
+        <article class="step">
+          <video class="loop" muted loop playsinline preload="none" width="960" height="456" poster="files/posters/structure.webp" data-src="files/videos/structure.mp4" aria-label="Color, disks, depth, and structural score of the outdoor map"></video>
+          <div class="step-text">
+            <span class="step-no">2</span>
+            <h4>Structural score</h4>
+            <p>Dispersion aggregated over the views becomes a score for each observation-supported non-ground disk.</p>
+          </div>
+        </article>
+        <div class="flow-arrow" aria-hidden="true"></div>
+        <article class="step">
+          <video class="loop" muted loop playsinline preload="none" width="960" height="540" poster="files/posters/roadmap.webp" data-src="files/videos/roadmap.mp4" aria-label="Nodes and edges forming a roadmap in the outdoor Gaussian map"></video>
+          <div class="step-text">
+            <span class="step-no">3</span>
+            <h4>Adaptive sampling</h4>
+            <p>Ground nodes are sampled more densely near high-score structure and connected into a roadmap.</p>
+          </div>
+        </article>
+        <div class="flow-arrow" aria-hidden="true"></div>
+        <article class="step">
+          <video class="loop" muted loop playsinline preload="none" width="1280" height="640" poster="files/posters/orthographic.webp" data-src="files/videos/orthographic.mp4" aria-label="Orthographic query along an edge: a clear edge passes and an edge blocked by a surface is rejected"></video>
+          <div class="step-text">
+            <span class="step-no">4</span>
+            <h4>Edge screening</h4>
+            <p>A path-aligned orthographic query renders along each candidate edge with the robot’s footprint. Edges whose rays hit a surface are rejected.</p>
+          </div>
+        </article>
+        <div class="flow-arrow" aria-hidden="true"></div>
+        <article class="step">
+          <video class="loop" muted loop playsinline preload="none" width="1280" height="640" poster="files/posters/cylindrical.webp" data-src="files/videos/cylindrical.mp4" aria-label="Cylindrical query around an edge, unrolled into a local clearance field"></video>
+          <div class="step-text">
+            <span class="step-no">5</span>
+            <h4>Clearance caching</h4>
+            <p>A cylindrical query renders the radial distance to surfaces around the edge. It is unrolled into a local clearance field and cached on the edge.</p>
+          </div>
+        </article>
+      </div>
+      <div class="flow-arrow between" aria-hidden="true"></div>
+      <div class="phase online">
+        <p class="phase-label">Online · Path planning</p>
+        <article class="step">
+          <video class="loop" muted loop playsinline preload="none" width="960" height="540" poster="files/posters/refinement.webp" data-src="files/videos/refinement.mp4" aria-label="The initial and refined robot routes passing around an outdoor railing"></video>
+          <div class="step-text">
+            <span class="step-no">6</span>
+            <h4>Path refinement</h4>
+            <p>The A* route is refined as a B-spline using the cached clearance, the robot’s dimensions, and ground support, then revalidated.</p>
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <h3>Adaptive vs. uniform sampling</h3>
+    <p>With the same sampling budget, adaptive sampling places more nodes near corners and clutter. Drag the divider to compare.</p>
+    <figure>
+      <div class="wipe" id="roadmap-wipe" style="--split:50%">
+        <img src="files/images/sampling-uniform.webp" width="1186" height="632" loading="lazy" alt="Uniform roadmap sampling with orange edges.">
+        <div class="wipe-after"><img src="files/images/sampling-adaptive.webp" width="1186" height="632" loading="lazy" alt="Adaptive roadmap sampling with blue edges, denser around the sidewalk obstacles."></div>
+        <span class="wipe-label left">Uniform</span><span class="wipe-label right">Adaptive</span>
+        <input id="sampling-slider" type="range" min="0" max="100" value="50" aria-label="Comparison divider: left shows uniform sampling, right shows adaptive sampling">
+      </div>
+      <figcaption>Matched views from Fig. 4 of the paper.</figcaption>
+    </figure>
+  </section>
+
+  <section id="results">
+    <h2>Results</h2>
+    <p>We evaluate 50 start–goal pairs in each of two scenes. All methods use the same 2DGS reconstruction. Stonehenge is synthetic and has an exact reference mesh (r = 0.05 scene units, ε<sub>ref</sub> = 0.005). Tokyo is a real-world capture evaluated against an aligned proxy mesh (r = 0.50 m, ε<sub>ref</sub> = 0.10 m).</p>
+
+    <div class="table-scroll" role="region" aria-labelledby="table-caption" tabindex="0">
+      <table aria-describedby="table-caption">
+        <thead>
+          <tr><th scope="col" rowspan="2">Method</th><th scope="colgroup" colspan="3">Stonehenge</th><th scope="colgroup" colspan="3">Tokyo</th></tr>
+          <tr><th scope="col">Pass (ε<sub>ref</sub>)</th><th scope="col">Pass (ε = 0)</th><th scope="col">SPL</th><th scope="col">Pass (ε<sub>ref</sub>)</th><th scope="col">Pass (ε = 0)</th><th scope="col">SPL</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">Disk PRM (1k)</th><td>21/50</td><td>15/50</td><td>0.335</td><td>6/50</td><td>6/50</td><td>0.091</td></tr>
+          <tr><th scope="row">Disk PRM (10k)</th><td>43/50</td><td>29/50</td><td>0.746</td><td>10/50</td><td>10/50</td><td>0.176</td></tr>
+          <tr><th scope="row">Disk PRM (60k)</th><td>45/50</td><td>27/50</td><td>0.810</td><td>10/50</td><td>9/50</td><td>0.168</td></tr>
+          <tr><th scope="row">RRT*</th><td>35/50</td><td>24/50</td><td>0.663</td><td>10/50</td><td>8/50</td><td>0.180</td></tr>
+          <tr><th scope="row">Informed RRT*</th><td>33/50</td><td>24/50</td><td>0.650</td><td>13/50</td><td>10/50</td><td>0.248</td></tr>
+          <tr><th scope="row">ESDF (ground-constr.)</th><td>38/50</td><td>26/50</td><td>0.751</td><td>12/50</td><td>8/50</td><td>0.218</td></tr>
+          <tr class="group"><th scope="row">Ours (uniform)</th><td>38/50</td><td>26/50</td><td>0.752</td><td>38/50</td><td>30/50</td><td>0.694</td></tr>
+          <tr><th scope="row">Ours (uniform) + refinement</th><td>40/50</td><td>31/50</td><td>0.781</td><td>39/50</td><td>33/50</td><td>0.717</td></tr>
+          <tr><th scope="row">Ours (adaptive)</th><td>46/50</td><td>31/50</td><td>0.917</td><td><b>40/50</b></td><td>32/50</td><td>0.765</td></tr>
+          <tr><th scope="row">Ours (adaptive) + refinement</th><td><b>48/50</b></td><td><b>34/50</b></td><td><b>0.956</b></td><td><b>40/50</b></td><td><b>34/50</b></td><td><b>0.782</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="caption" id="table-caption">Table I. Collision pass counts at ε<sub>ref</sub> and at ε = 0, and SPL. Higher is better. Best values in bold.</p>
+
+    <figure class="wide">
+      <a href="files/images/planning-results.webp" target="_blank" rel="noopener"><img src="files/images/planning-results.webp" width="2200" height="670" loading="lazy" alt="Representative trajectories of each planning method for four start-goal pairs in Stonehenge and Tokyo."></a>
+      <figcaption>Representative trajectories for four pairs in each scene. Colors identify the planning method.</figcaption>
+    </figure>
+
+    <div class="grid two">
+      <figure>
+        <a href="files/images/clearance-results.webp" target="_blank" rel="noopener"><img src="files/images/clearance-results.webp" width="1500" height="611" loading="lazy" alt="Comparison of LCC and ESDF clearance error, false-safe and false-blocked rates, memory, and build time."></a>
+        <figcaption><b>Clearance fidelity</b> on 5,716 near-boundary queries. LCC and ESDF use the same rendered surface samples. LCC has lower clearance error and fewer false-blocked configurations, though false-safe cases remain.</figcaption>
+      </figure>
+      <figure>
+        <a href="files/images/online-latency.webp" target="_blank" rel="noopener"><img src="files/images/online-latency.webp" width="1500" height="653" loading="lazy" alt="Mean online planning latency per method for Stonehenge and Tokyo."></a>
+        <figcaption><b>Online latency</b>, averaged over 50 requests including failures. Refinement costs 0.357 s per request on Stonehenge and 1.11 s on Tokyo.</figcaption>
+      </figure>
+    </div>
+    <p class="note">Hardware: RTX 4090, Core i9-10900K, 94 GB RAM. Each edge caches a 64 × 128 clearance field, and refinement uses 12 B-spline control points. Scope: fixed maps, an ellipsoidal robot body, and ground-supported paths.</p>
+  </section>
+
+  <section id="body">
+    <h2>Planning for the robot’s body</h2>
+    <p>Footprint queries depend on the robot’s size, so the same start and goal can produce different routes.</p>
+    <div class="grid two">
+      <figure>
+        <a href="files/images/robot-wide.webp" target="_blank" rel="noopener"><img src="files/images/robot-wide.webp" width="1028" height="713" loading="lazy" alt="With a lateral half-width of 0.3 m, the robot follows the wider passage around a railing."></a>
+        <figcaption>Lateral half-width 0.3 m: the path takes the wider passage around the railing.</figcaption>
+      </figure>
+      <figure>
+        <a href="files/images/robot-narrow.webp" target="_blank" rel="noopener"><img src="files/images/robot-narrow.webp" width="960" height="712" loading="lazy" alt="With a lateral half-width of 0.1 m, the robot takes the narrower passage for a shorter path."></a>
+        <figcaption>Lateral half-width 0.1 m: the narrow gap is feasible, which gives a shorter path.</figcaption>
+      </figure>
+    </div>
+    <figure>
+      <video class="loop" muted loop playsinline preload="none" width="960" height="476" poster="files/posters/path.webp" data-src="files/videos/path.mp4" aria-label="Robot body poses along the refined path"></video>
+      <figcaption>Robot body poses along a refined path.</figcaption>
+    </figure>
+  </section>
+
+  <section id="citation">
+    <h2>Citation</h2>
+    <p>BibTeX will be added once the paper is public.</p>
+  </section>
+</main>
+<footer class="site-footer">
+  <p>Website template adapted from <a href="https://nerfies.github.io/" target="_blank" rel="noopener">Nerfies</a>.</p>
+</footer>
+<dialog id="zoom" class="zoom" aria-label="Image viewer">
+  <div class="zoom-stage"><img id="zoom-image" alt="" draggable="false"></div>
+  <div class="zoom-bar">
+    <button type="button" data-zoom="out" aria-label="Zoom out">−</button>
+    <button type="button" data-zoom="fit">Fit</button>
+    <button type="button" data-zoom="in" aria-label="Zoom in">+</button>
+    <a id="zoom-original" target="_blank" rel="noopener">Open original</a>
+    <button type="button" data-zoom="close" aria-label="Close">✕</button>
+  </div>
+  <p class="zoom-hint">Scroll or pinch to zoom · drag to move · Esc to close</p>
+</dialog>
+<noscript><p class="noscript">JavaScript is off, so videos show a still frame.</p></noscript>
+</body>
+</html>
