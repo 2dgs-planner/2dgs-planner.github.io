@@ -3,30 +3,150 @@
 const $ = (selector, scope = document) => scope.querySelector(selector);
 const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
 
-// Looping clips behave like GIFs: muted, no controls, autoplay while on screen.
-// A clip is only downloaded once it approaches the viewport, and pauses when it leaves.
-const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-function load(video) {
-  if (!video.getAttribute('src')) video.src = video.dataset.src;
+// Only one visible clip plays or buffers at a time. Incomplete offscreen
+// downloads are cancelled; fully buffered clips stay available for replay.
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const connection = navigator.connection;
+const clips = [];
+let activeClip = null;
+let clipTimer;
+const slowConnection = () => connection?.saveData || /^(slow-2g|2g|3g)$/.test(connection?.effectiveType || '');
+const mayAutoplay = () => !reducedMotion.matches && !slowConnection();
+
+function clipSource(clip) {
+  const { video, quality } = clip;
+  if (quality === 'high') return video.dataset.srcHigh;
+  if (video.dataset.srcMobile && (innerWidth <= 720 || slowConnection())) return video.dataset.srcMobile;
+  return video.dataset.src;
+}
+function updateClip(clip) {
+  const running = activeClip === clip;
+  clip.button.textContent = running ? (clip.loading ? 'Loading…' : 'Pause') : (clip.failed ? 'Retry' : 'Play');
+  clip.button.setAttribute('aria-label', `${running ? 'Pause' : 'Play'}: ${clip.video.getAttribute('aria-label')}`);
+  clip.player.setAttribute('aria-busy', String(running && clip.loading));
+}
+function fullyBuffered(video) {
+  if (!Number.isFinite(video.duration) || !video.buffered.length) return false;
+  let end = 0;
+  for (let i = 0; i < video.buffered.length; i++) {
+    if (video.buffered.start(i) > end + 0.1) return false;
+    end = video.buffered.end(i);
+  }
+  return end >= video.duration - 0.1;
+}
+function releaseClip(clip) {
+  const { video } = clip;
+  if (!video.hasAttribute('src')) return;
+  clip.resumeAt = video.currentTime || clip.resumeAt;
+  video.removeAttribute('src');
+  video.load(); // Cancels the previous media request as well as decoding.
+}
+function stopClip(clip) {
+  if (activeClip === clip) activeClip = null;
+  clip.video.pause();
+  clip.loading = false;
+  if (!fullyBuffered(clip.video)) releaseClip(clip);
+  updateClip(clip);
+}
+function startClip(clip, manual = false) {
+  if (document.hidden) return;
+  if (activeClip && activeClip !== clip) stopClip(activeClip);
+  if (manual) { clip.userPaused = false; clip.blocked = false; clip.manual = true; }
+  activeClip = clip;
+  clip.failed = false;
+  const source = clipSource(clip);
+  if (clip.video.getAttribute('src') !== source) {
+    releaseClip(clip);
+    clip.video.src = source;
+  }
+  clip.loading = clip.video.readyState < 3;
+  updateClip(clip);
+  clip.video.play().catch(error => {
+    if (activeClip !== clip || error.name === 'AbortError') return;
+    clip.blocked = true; // Autoplay rejection needs a user gesture, not a retry loop.
+    stopClip(clip);
+  });
+}
+function scheduleClip() {
+  clearTimeout(clipTimer);
+  if (document.hidden) return;
+  clipTimer = setTimeout(() => {
+    if (!mayAutoplay() || document.hidden) return;
+    if (activeClip?.manual && activeClip.ratio >= 0.35) return;
+    const candidates = clips.filter(clip => clip.ratio >= 0.35 && !clip.userPaused && !clip.blocked && !clip.failed);
+    candidates.sort((a, b) => b.area - a.area);
+    const next = candidates[0];
+    if (next && next !== activeClip) startClip(next);
+  }, 250); // Do not fetch clips that the visitor merely scrolls past.
 }
 const clipObserver = new IntersectionObserver(entries => {
-  for (const { target: video, isIntersecting } of entries) {
-    if (isIntersecting) { load(video); video.play().catch(() => {}); }
-    else video.pause();
+  for (const entry of entries) {
+    const clip = clips.find(item => item.video === entry.target);
+    clip.ratio = entry.intersectionRatio;
+    clip.area = entry.intersectionRect.width * entry.intersectionRect.height;
+    if (activeClip === clip && clip.ratio < 0.35) stopClip(clip);
   }
-}, { rootMargin: '200px 0px' });
+  scheduleClip();
+}, { threshold: [0, 0.1, 0.35, 0.5, 0.75, 1] });
 $$('video.loop').forEach(video => {
-  if (reducedMotion) {
-    video.controls = true;
-    video.addEventListener('play', () => load(video), { once: true });
-    return;
+  const player = document.createElement('div');
+  player.className = 'clip-player';
+  video.before(player);
+  player.append(video);
+  const toolbar = document.createElement('div');
+  toolbar.className = 'clip-toolbar';
+  const button = document.createElement('button');
+  button.type = 'button';
+  const clip = { video, player, button, ratio: 0, area: 0, resumeAt: 0, quality: 'auto' };
+  clips.push(clip);
+  if (video.dataset.srcHigh) {
+    const quality = document.createElement('select');
+    quality.setAttribute('aria-label', 'Teaser video quality');
+    quality.innerHTML = '<option value="auto">Auto quality</option><option value="high">High quality · 31 MB</option>';
+    quality.addEventListener('change', () => {
+      clip.quality = quality.value;
+      startClip(clip, true);
+    });
+    toolbar.append(quality);
   }
+  toolbar.append(button);
+  player.append(toolbar);
+  const toggle = () => {
+    if (activeClip === clip) { clip.userPaused = true; stopClip(clip); }
+    else startClip(clip, true);
+  };
+  button.addEventListener('click', toggle);
+  video.addEventListener('click', toggle);
+  video.addEventListener('loadedmetadata', () => {
+    if (clip.resumeAt && Number.isFinite(video.duration)) video.currentTime = Math.min(clip.resumeAt, Math.max(0, video.duration - 0.1));
+    clip.resumeAt = 0;
+  });
+  video.addEventListener('playing', () => {
+    if (activeClip !== clip) { video.pause(); return; }
+    clip.loading = false;
+    updateClip(clip);
+  });
+  video.addEventListener('waiting', () => { clip.loading = true; updateClip(clip); });
+  video.addEventListener('error', () => {
+    if (!video.hasAttribute('src')) return;
+    clip.failed = true;
+    stopClip(clip);
+  });
+  updateClip(clip);
   clipObserver.observe(video);
-  video.addEventListener('click', () => (video.paused ? video.play() : video.pause()));
 });
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) $$('video.loop').forEach(video => video.pause());
+  clearTimeout(clipTimer);
+  if (document.hidden) {
+    if (activeClip) stopClip(activeClip);
+  } else scheduleClip();
 });
+function updatePlaybackPreference() {
+  if (!mayAutoplay() && activeClip && !activeClip.manual) stopClip(activeClip);
+  scheduleClip();
+}
+reducedMotion.addEventListener('change', updatePlaybackPreference);
+connection?.addEventListener('change', updatePlaybackPreference);
 
 // Rendered layer tabs.
 const layers = {
